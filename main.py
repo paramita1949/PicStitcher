@@ -9,7 +9,7 @@ from tkinter import filedialog, ttk, messagebox, colorchooser  # 添加colorchoo
 import threading
 
 # 版本信息
-__version__ = "1.5.0"
+__version__ = "1.4"
 
 def extract_info(filename):
     """从文件名中提取歌曲编号、歌名和页码"""
