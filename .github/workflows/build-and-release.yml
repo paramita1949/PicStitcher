@@ -1,0 +1,104 @@
+name: Build and Release PicStitcher
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v 开头的标签时触发（如 v1.5.0）
+      - 'V*'  # 也支持大写 V 开头的标签
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-minimal.txt
+        pip install pyinstaller
+
+    - name: Extract version number
+      id: version
+      run: |
+        $tag = "${{ github.ref_name }}"
+        # 移除 v/V 前缀，提取数字版本号
+        $version = $tag -replace '^[vV]', ''
+        # 如果版本号不足4段，补充.0
+        $parts = $version -split '-'
+        $numVersion = $parts[0]
+        if ($numVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            if ($numVersion -match '^\d+\.\d+\.\d+$') {
+                $numVersion = "$numVersion.0"
+            } elseif ($numVersion -match '^\d+\.\d+$') {
+                $numVersion = "$numVersion.0.0"
+            } else {
+                $numVersion = "1.5.0.0"
+            }
+        }
+        echo "VERSION=$numVersion" >> $env:GITHUB_OUTPUT
+        echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+        echo "Numeric version: $numVersion"
+        echo "Tag: $tag"
+      shell: powershell
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile --windowed --icon=icon.ico --add-data "icon.ico;." --hidden-import=PIL --hidden-import=numpy --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.filedialog --hidden-import=tkinter.messagebox --hidden-import=tkinter.colorchooser --name "PicStitcher-${{ steps.version.outputs.TAG }}" --distpath dist main.py
+      shell: cmd
+
+    - name: Verify build output
+      run: |
+        dir dist\PicStitcher-*.exe
+      shell: cmd
+      
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        name: PicStitcher ${{ steps.version.outputs.TAG }}
+        body: |
+          ## PicStitcher ${{ steps.version.outputs.TAG }}
+
+          ### 主要功能：
+          - 图片智能拼接
+          - 自动识别歌曲编号和页码
+          - 支持多种文件名格式
+          - 批量处理图片
+          - 自定义背景颜色
+          - 自动保存配置
+
+          ### 下载说明：
+          下载 `PicStitcher-${{ steps.version.outputs.TAG }}.exe` 即可直接运行，无需安装 Python 环境。
+
+          ### 系统要求：
+          - Windows 10/11
+          - 无需额外依赖
+
+          ### 使用方法：
+          1. 运行程序
+          2. 选择包含图片的文件夹
+          3. 设置输出目录
+          4. 点击"开始处理"按钮
+          5. 等待处理完成
+
+          ### 支持的文件名格式：
+          - `第001首 歌名1.jpg`
+          - `001.歌名1.jpg`
+          - `第0707愿将我的心给你1.jpg`
+
+          ### 更新日志：
+          请查看 [updata.txt](https://github.com/paramita1949/PicStitcher/blob/main/updata.txt) 获取完整更新历史。
+        files: |
+          dist/PicStitcher-${{ steps.version.outputs.TAG }}.exe
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

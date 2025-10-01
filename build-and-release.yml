@@ -1,0 +1,152 @@
+name: Build and Release Canvas Cast
+
+on:
+  push:
+    tags:
+      - 'V*'  # 当推送 V 开头的标签时触发（如 V2.5.1）
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Download and Install VLC
+      run: |
+        # 下载 VLC 便携版（带重试机制）
+        Write-Host "Downloading VLC..."
+        $ProgressPreference = 'SilentlyContinue'
+        $maxRetries = 3
+        $retryCount = 0
+        $success = $false
+
+        while (-not $success -and $retryCount -lt $maxRetries) {
+            try {
+                $retryCount++
+                Write-Host "Download attempt $retryCount of $maxRetries..."
+                Invoke-WebRequest -Uri "https://mirror.aarnet.edu.au/pub/videolan/vlc/3.0.20/win64/vlc-3.0.20-win64.zip" -OutFile "vlc.zip" -UseBasicParsing
+                $success = $true
+            } catch {
+                Write-Host "Download failed: $_"
+                if ($retryCount -lt $maxRetries) {
+                    Write-Host "Retrying in 5 seconds..."
+                    Start-Sleep -Seconds 5
+                }
+            }
+        }
+
+        # 验证下载
+        if (-not (Test-Path "vlc.zip")) {
+            Write-Error "VLC download failed after $maxRetries attempts"
+            exit 1
+        }
+
+        Write-Host "VLC downloaded: $((Get-Item vlc.zip).Length) bytes"
+
+        # 解压 VLC
+        Write-Host "Extracting VLC..."
+        Expand-Archive -Path "vlc.zip" -DestinationPath "." -Force
+
+        # 验证解压
+        if (-not (Test-Path "vlc-3.0.20")) {
+            Write-Error "VLC extraction failed"
+            exit 1
+        }
+
+        # 复制 VLC DLL 到工作目录
+        Write-Host "Copying VLC files..."
+        Copy-Item -Path "vlc-3.0.20\*.dll" -Destination "." -Force
+        Copy-Item -Path "vlc-3.0.20\plugins" -Destination ".\plugins" -Recurse -Force
+
+        # 验证文件
+        Write-Host "Verifying VLC files..."
+        Get-ChildItem -Path "." -Filter "libvlc*.dll"
+
+        if (-not (Test-Path "libvlc.dll")) {
+            Write-Error "libvlc.dll not found"
+            exit 1
+        }
+
+        Write-Host "VLC installation completed successfully"
+      shell: powershell
+
+    - name: Install MSVC (required by Nuitka)
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Extract version number
+      id: version
+      run: |
+        $tag = "${{ github.ref_name }}"
+        # 移除 V 前缀，提取数字版本号
+        $version = $tag -replace '^V', ''
+        # 如果版本号不足4段，补充.0
+        $parts = $version -split '-'
+        $numVersion = $parts[0]
+        if ($numVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            if ($numVersion -match '^\d+\.\d+\.\d+$') {
+                $numVersion = "$numVersion.0"
+            } elseif ($numVersion -match '^\d+\.\d+$') {
+                $numVersion = "$numVersion.0.0"
+            } else {
+                $numVersion = "2.5.1.0"
+            }
+        }
+        echo "VERSION=$numVersion" >> $env:GITHUB_OUTPUT
+        echo "Numeric version: $numVersion"
+      shell: powershell
+
+    - name: Build with Nuitka
+      run: |
+        python -m nuitka --standalone --onefile --windows-console-mode=disable --enable-plugin=tk-inter --include-data-dir=gpu=gpu --include-data-dir=core=core --include-data-dir=ui=ui --include-data-dir=managers=managers --include-data-dir=projection=projection --include-data-dir=engines=engines --include-data-dir=plugins=plugins --include-data-file=baodian.ico=baodian.ico --include-data-file=使用说明.md=使用说明.md --include-data-file=libvlc.dll=libvlc.dll --include-data-file=libvlccore.dll=libvlccore.dll --include-module=vlc --windows-icon-from-ico=baodian.ico --windows-company-name="Canvas Cast" --windows-product-name="Canvas Cast ${{ github.ref_name }}" --windows-file-version="${{ steps.version.outputs.VERSION }}" --windows-product-version="${{ steps.version.outputs.VERSION }}" --windows-file-description="Canvas Cast - 图像媒体投影" --output-filename=CanvasCast-${{ github.ref_name }}.exe main.py
+      shell: cmd
+
+    - name: Verify build output
+      run: |
+        dir CanvasCast-*.exe
+      shell: cmd
+      
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Canvas Cast ${{ github.ref_name }}
+        body: |
+          ## Canvas Cast ${{ github.ref_name }}
+
+          ### 主要功能：
+          - 图像投影与媒体播放
+          - 智能背景检测与变色效果
+          - GPU 加速渲染
+          - 多屏幕支持
+          - 原图标记与关键帧管理
+
+          ### 下载说明：
+          下载 `CanvasCast-${{ github.ref_name }}.exe` 即可直接运行，无需安装 Python 环境。
+
+          ### 系统要求：
+          - Windows 10/11
+          - 支持 OpenGL 的显卡（可选，用于 GPU 加速）
+
+          详细使用说明请查看程序目录中的 `使用说明.md` 文件。
+
+          ### 更新日志：
+          请查看 [updata.txt](https://github.com/paramita1949/CANVAS/blob/master/updata.txt) 获取完整更新历史。
+        files: |
+          CanvasCast-${{ github.ref_name }}.exe
+          使用说明.md
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
