@@ -8,6 +8,9 @@ import tkinter as tk
 from tkinter import filedialog, ttk, messagebox, colorchooser  # 添加colorchooser
 import threading
 
+# 版本信息
+__version__ = "1.5.0"
+
 def extract_info(filename):
     """从文件名中提取歌曲编号、歌名和页码"""
     # 使用 pathlib 获取文件名（无扩展名）
@@ -262,7 +265,7 @@ def process_images(folder_path, output_folder, invert=False, text_r=187, text_g=
 class ImageProcessorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("图片批量拼接与反色处理工具V1.4")
+        self.root.title(f"图片批量拼接与反色处理工具 V{__version__}")
         self.root.geometry("600x550")  # 稍微增加高度以容纳新按钮
         self.root.resizable(True, True)
 
