@@ -76,7 +76,7 @@ jobs:
 
     - name: Build with Nuitka
       run: |
-        python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=tk-inter --include-data-file=icon.ico=icon.ico --windows-icon-from-ico=icon.ico --windows-company-name="PicStitcher" --windows-product-name="PicStitcher ${{ steps.version.outputs.TAG }}" --windows-file-version="${{ steps.version.outputs.VERSION }}" --windows-product-version="${{ steps.version.outputs.VERSION }}" --windows-file-description="PicStitcher - 图片智能拼接工具" --output-dir=build-nuitka --output-filename=PicStitcher.exe main.py
+        python -m nuitka --standalone --assume-yes-for-downloads --windows-console-mode=disable --enable-plugin=tk-inter --include-data-file=icon.ico=icon.ico --windows-icon-from-ico=icon.ico --windows-company-name="PicStitcher" --windows-product-name="PicStitcher ${{ steps.version.outputs.TAG }}" --windows-file-version="${{ steps.version.outputs.VERSION }}" --windows-product-version="${{ steps.version.outputs.VERSION }}" --windows-file-description="PicStitcher - 图片智能拼接工具" --output-dir=build-nuitka --output-filename=PicStitcher.exe main.py
       shell: cmd
 
     - name: Verify Nuitka build output
