@@ -26,7 +26,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements-minimal.txt
-        pip install nuitka ordered-set zstandard
+        pip install pyinstaller nuitka ordered-set zstandard
 
     - name: Install MSVC (required by Nuitka)
       uses: ilammy/msvc-dev-cmd@v1
@@ -55,23 +55,42 @@ jobs:
         echo "Tag: $tag"
       shell: powershell
 
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --windowed --icon=icon.ico --add-data "icon.ico;." --hidden-import=PIL --hidden-import=numpy --hidden-import=tkinter --hidden-import=tkinter.ttk --hidden-import=tkinter.filedialog --hidden-import=tkinter.messagebox --hidden-import=tkinter.colorchooser --name "PicStitcher" --distpath dist-pyinstaller main.py
+      shell: cmd
+
+    - name: Verify PyInstaller build output
+      run: |
+        dir dist-pyinstaller\PicStitcher
+        dir dist-pyinstaller\PicStitcher\PicStitcher.exe
+      shell: cmd
+
+    - name: Package PyInstaller distribution
+      run: |
+        cd dist-pyinstaller\PicStitcher
+        7z a -tzip ..\..\PicStitcher-PyInstaller-${{ steps.version.outputs.TAG }}.zip *
+        cd ..\..
+        dir PicStitcher-PyInstaller-*.zip
+      shell: cmd
+
     - name: Build with Nuitka
       run: |
-        python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=tk-inter --include-data-file=icon.ico=icon.ico --windows-icon-from-ico=icon.ico --windows-company-name="PicStitcher" --windows-product-name="PicStitcher ${{ steps.version.outputs.TAG }}" --windows-file-version="${{ steps.version.outputs.VERSION }}" --windows-product-version="${{ steps.version.outputs.VERSION }}" --windows-file-description="PicStitcher - 图片智能拼接工具" --output-dir=build --output-filename=PicStitcher.exe main.py
+        python -m nuitka --standalone --windows-console-mode=disable --enable-plugin=tk-inter --include-data-file=icon.ico=icon.ico --windows-icon-from-ico=icon.ico --windows-company-name="PicStitcher" --windows-product-name="PicStitcher ${{ steps.version.outputs.TAG }}" --windows-file-version="${{ steps.version.outputs.VERSION }}" --windows-product-version="${{ steps.version.outputs.VERSION }}" --windows-file-description="PicStitcher - 图片智能拼接工具" --output-dir=build-nuitka --output-filename=PicStitcher.exe main.py
       shell: cmd
 
-    - name: Verify build output
+    - name: Verify Nuitka build output
       run: |
-        dir build\main.dist
-        dir build\main.dist\PicStitcher.exe
+        dir build-nuitka\main.dist
+        dir build-nuitka\main.dist\PicStitcher.exe
       shell: cmd
 
-    - name: Package distribution
+    - name: Package Nuitka distribution
       run: |
-        cd build\main.dist
-        7z a -tzip ..\..\PicStitcher-${{ steps.version.outputs.TAG }}.zip *
+        cd build-nuitka\main.dist
+        7z a -tzip ..\..\PicStitcher-Nuitka-${{ steps.version.outputs.TAG }}.zip *
         cd ..\..
-        dir PicStitcher-*.zip
+        dir PicStitcher-Nuitka-*.zip
       shell: cmd
       
     - name: Create Release and Upload Assets
@@ -90,19 +109,31 @@ jobs:
           - 自动保存配置
 
           ### 下载说明：
-          下载 `PicStitcher-${{ steps.version.outputs.TAG }}.zip` 并解压，运行 `PicStitcher.exe` 即可使用，无需安装 Python 环境。
+          本版本提供两种打包方式，请根据需要选择：
+
+          #### 🚀 Nuitka 版本（推荐）
+          - 文件：`PicStitcher-Nuitka-${{ steps.version.outputs.TAG }}.zip`
+          - 特点：启动速度快，运行性能优秀
+          - 适合：日常使用，追求性能
+
+          #### 📦 PyInstaller 版本
+          - 文件：`PicStitcher-PyInstaller-${{ steps.version.outputs.TAG }}.zip`
+          - 特点：兼容性好，稳定可靠
+          - 适合：遇到兼容性问题时使用
 
           ### 系统要求：
           - Windows 10/11
           - 无需额外依赖
+          - 无需安装 Python 环境
 
           ### 使用方法：
-          1. 解压 ZIP 文件到任意目录
-          2. 运行 `PicStitcher.exe`
-          3. 选择包含图片的文件夹
-          4. 设置输出目录
-          5. 点击"开始处理"按钮
-          6. 等待处理完成
+          1. 下载任意一个 ZIP 文件
+          2. 解压到任意目录
+          3. 运行 `PicStitcher.exe`
+          4. 选择包含图片的文件夹
+          5. 设置输出目录
+          6. 点击"开始处理"按钮
+          7. 等待处理完成
 
           ### 支持的文件名格式：
           - `第001首 歌名1.jpg`
@@ -110,14 +141,15 @@ jobs:
           - `第0707愿将我的心给你1.jpg`
 
           ### 技术说明：
-          - 使用 Nuitka 编译，性能更优
-          - Standalone 模式，包含所有依赖
-          - 启动速度快，运行稳定
+          - **Nuitka 版本**：将 Python 代码编译为原生 C 代码，性能更优
+          - **PyInstaller 版本**：使用成熟的打包工具，兼容性更好
+          - 两个版本功能完全相同，可根据个人喜好选择
 
           ### 更新日志：
           请查看 [updata.txt](https://github.com/paramita1949/PicStitcher/blob/main/updata.txt) 获取完整更新历史。
         files: |
-          PicStitcher-${{ steps.version.outputs.TAG }}.zip
+          PicStitcher-PyInstaller-${{ steps.version.outputs.TAG }}.zip
+          PicStitcher-Nuitka-${{ steps.version.outputs.TAG }}.zip
         draft: false
         prerelease: false
       env:

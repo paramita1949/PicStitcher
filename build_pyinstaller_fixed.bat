@@ -1,8 +1,22 @@
 @echo off
-echo Building with PyInstaller...
+echo ========================================
+echo Building PicStitcher with PyInstaller
+echo ========================================
+echo.
 
+REM 检查是否安装了 PyInstaller
+python -c "import PyInstaller" 2>nul
+if errorlevel 1 (
+    echo PyInstaller not found. Installing...
+    pip install pyinstaller
+)
+
+echo.
+echo Starting build process...
+echo.
+
+REM 使用 PyInstaller 打包（非单文件模式）
 pyinstaller ^
---onefile ^
 --windowed ^
 --icon=icon.ico ^
 --add-data "icon.ico;." ^
@@ -13,11 +27,29 @@ pyinstaller ^
 --hidden-import=tkinter.filedialog ^
 --hidden-import=tkinter.messagebox ^
 --hidden-import=tkinter.colorchooser ^
---name "ImageProcessorV1.4" ^
---distpath dist ^
+--name "PicStitcher" ^
+--distpath dist-pyinstaller ^
 main.py
 
+if errorlevel 1 (
+    echo.
+    echo ========================================
+    echo Build FAILED!
+    echo ========================================
+    pause
+    exit /b 1
+)
+
 echo.
-echo Build completed!
-echo Executable: dist\ImageProcessorV1.4.exe
+echo ========================================
+echo Build completed successfully!
+echo ========================================
+echo.
+echo Output directory: dist-pyinstaller\PicStitcher
+echo Executable: dist-pyinstaller\PicStitcher\PicStitcher.exe
+echo.
+echo You can now run the program from:
+echo   dist-pyinstaller\PicStitcher\PicStitcher.exe
+echo.
+
 pause
