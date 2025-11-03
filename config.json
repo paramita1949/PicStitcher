@@ -2,6 +2,8 @@
   "input_folder": "",
   "output_folder": "",
   "yellow_text_r": 255,
-  "yellow_text_g": 255,
-  "yellow_text_b": 255
+  "yellow_text_g": 165,
+  "yellow_text_b": 32,
+  "use_quality_mode": false,
+  "use_auto_mode": true
 }
