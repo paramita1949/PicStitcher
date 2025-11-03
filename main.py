@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import multiprocessing as mp
 
 # 版本信息
-__version__ = "1.5-优化版"
+__version__ = "1.6"
 
 def extract_info(filename):
     """从文件名中提取歌曲编号、歌名和页码"""
@@ -290,7 +290,7 @@ def apply_yellow_text_effect(image, text_r=187, text_g=159, text_b=97, use_quali
     else:
         return apply_yellow_text_effect_fast(image, text_r, text_g, text_b)
 
-def process_images(folder_path, output_folder, invert=False, text_r=187, text_g=159, text_b=97):
+def process_images(folder_path, output_folder, invert=False, text_r=187, text_g=159, text_b=97, enable_compression=True, compression_quality=82):
     """处理文件夹中的图片并按规则拼接，可选择是否反色处理"""
     # 转换为 Path 对象
     folder_path = Path(folder_path)
@@ -336,13 +336,18 @@ def process_images(folder_path, output_folder, invert=False, text_r=187, text_g=
             suffix = "_反色拼接" if invert else "_拼接"
             output_filename = f"第{song_number}首_{song_name}{suffix}.jpg"
             output_path = output_folder / output_filename
-            result_img.save(output_path, quality=95)
+            
+            # 根据压缩设置保存
+            if enable_compression:
+                result_img.save(output_path, format='JPEG', quality=compression_quality, optimize=True, progressive=True)
+            else:
+                result_img.save(output_path, quality=95)
 
 class ImageProcessorApp:
     def __init__(self, root):
         self.root = root
         self.root.title(f"图片批量拼接与反色处理工具 V{__version__}")
-        self.root.geometry("700x600")  # 简化UI后减小窗口大小
+        self.root.geometry("700x700")  # 增加窗口高度以适应新的压缩设置
         self.root.resizable(True, True)
 
         # 设置窗口图标
@@ -367,11 +372,22 @@ class ImageProcessorApp:
         self.use_quality_mode = False
         self.use_auto_mode = True  # 默认启用智能模式
         
+        # 压缩设置（默认开启压缩）
+        self.enable_compression = True
+        self.compression_quality = 82  # 默认质量82（最佳平衡点）
+        
         self.create_widgets()
         self.load_config()  # 初始化时加载配置
         
         # 确保模式选择和内部变量一致
         self.update_mode()
+        
+        # 初始化压缩状态UI
+        if hasattr(self, 'quality_scale'):
+            if self.enable_compression:
+                self.quality_scale.config(state='normal')
+            else:
+                self.quality_scale.config(state='disabled')
 
     def get_config_path(self):
         """获取配置文件路径，兼容打包后的EXE环境"""
@@ -509,6 +525,51 @@ class ImageProcessorApp:
         ttk.Radiobutton(algo_inner_frame, text="高质量模式", 
                        variable=self.algorithm_mode, value="quality",
                        command=self.update_algorithm_mode).pack(side=tk.LEFT, padx=5)
+
+        # 压缩设置框架
+        compression_frame = ttk.LabelFrame(main_frame, text="压缩设置")
+        compression_frame.pack(fill=tk.X, pady=10)
+
+        # 压缩选项内部框架
+        comp_inner_frame = ttk.Frame(compression_frame)
+        comp_inner_frame.pack(fill=tk.X, padx=10, pady=5)
+
+        # 压缩开关复选框
+        self.compression_var = tk.BooleanVar(value=True)  # 默认开启
+        self.compression_checkbox = ttk.Checkbutton(
+            comp_inner_frame, 
+            text="启用智能压缩（推荐）", 
+            variable=self.compression_var,
+            command=self.update_compression_state
+        )
+        self.compression_checkbox.pack(side=tk.LEFT, padx=5)
+
+        # 压缩质量设置
+        ttk.Label(comp_inner_frame, text="压缩质量:").pack(side=tk.LEFT, padx=(20, 5))
+        
+        # 质量滑块
+        self.quality_var = tk.IntVar(value=82)
+        self.quality_scale = ttk.Scale(
+            comp_inner_frame, 
+            from_=70, 
+            to=95, 
+            variable=self.quality_var,
+            orient=tk.HORIZONTAL,
+            length=150,
+            command=self.on_quality_change
+        )
+        self.quality_scale.pack(side=tk.LEFT, padx=5)
+        
+        # 质量值显示
+        self.quality_label = ttk.Label(comp_inner_frame, text="82")
+        self.quality_label.pack(side=tk.LEFT, padx=5)
+        
+        # 压缩说明
+        comp_info_frame = ttk.Frame(compression_frame)
+        comp_info_frame.pack(fill=tk.X, padx=10, pady=(0, 5))
+        
+        info_text = "💡 质量70-75=高压缩(体积最小), 80-85=均衡(推荐), 90-95=高质量(接近原图)"
+        ttk.Label(comp_info_frame, text=info_text, foreground="gray", font=('Arial', 8)).pack(side=tk.LEFT)
 
         # RGB颜色设置区域 - 增强版
         rgb_frame = ttk.LabelFrame(main_frame, text="颜色设置")
@@ -738,6 +799,10 @@ class ImageProcessorApp:
                 self.use_auto_mode = use_auto
                 self.use_quality_mode = use_quality
                 
+                # 加载压缩设置
+                self.enable_compression = cfg.get('enable_compression', True)
+                self.compression_quality = cfg.get('compression_quality', 82)
+                
                 # 更新算法模式UI（如果已创建）
                 if hasattr(self, 'algorithm_mode'):
                     if use_auto:
@@ -746,6 +811,20 @@ class ImageProcessorApp:
                         self.algorithm_mode.set("quality")
                     else:
                         self.algorithm_mode.set("fast")
+                
+                # 更新压缩UI（如果已创建）
+                if hasattr(self, 'compression_var'):
+                    self.compression_var.set(self.enable_compression)
+                if hasattr(self, 'quality_var'):
+                    self.quality_var.set(self.compression_quality)
+                if hasattr(self, 'quality_label'):
+                    self.quality_label.config(text=str(self.compression_quality))
+                # 根据压缩状态设置滑块状态
+                if hasattr(self, 'quality_scale'):
+                    if self.enable_compression:
+                        self.quality_scale.config(state='normal')
+                    else:
+                        self.quality_scale.config(state='disabled')
 
                 # 自动填充到输入框
                 self.input_entry.delete(0, tk.END)
@@ -791,7 +870,9 @@ class ImageProcessorApp:
                 'yellow_text_b': 32,
                 'use_quality_mode': False,
                 'use_auto_mode': True,
-                '_comment': '配置说明：yellow_text_r/g/b 为黄字效果的RGB颜色值(0-255)，默认秋麒麟色(218,165,32)，use_auto_mode为True使用智能模式(推荐)，use_quality_mode为True使用高质量模式，两者都为False使用快速模式'
+                'enable_compression': True,
+                'compression_quality': 82,
+                '_comment': '配置说明：yellow_text_r/g/b 为黄字效果的RGB颜色值(0-255)，默认秋麒麟色(218,165,32)，use_auto_mode为True使用智能模式(推荐)，use_quality_mode为True使用高质量模式，两者都为False使用快速模式，enable_compression为True启用压缩，compression_quality为压缩质量(70-95)'
             }
 
             print(f"准备创建配置文件: {self.config_path}")
@@ -826,7 +907,9 @@ class ImageProcessorApp:
                 'yellow_text_g': self.yellow_text_g,
                 'yellow_text_b': self.yellow_text_b,
                 'use_quality_mode': self.use_quality_mode,
-                'use_auto_mode': self.use_auto_mode
+                'use_auto_mode': self.use_auto_mode,
+                'enable_compression': self.enable_compression,
+                'compression_quality': self.compression_quality
             }
             with self.config_path.open('w', encoding='utf-8') as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -958,6 +1041,34 @@ class ImageProcessorApp:
         """添加日志信息到日志框"""
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
+    
+    def save_image_with_compression(self, image, output_path):
+        """根据压缩设置保存图片
+        
+        Args:
+            image: PIL.Image对象
+            output_path: 输出路径
+        """
+        # 确保图像是RGB模式（没有透明通道）
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+        
+        if self.enable_compression:
+            # 启用压缩：使用优化参数
+            image.save(
+                output_path,
+                format='JPEG',
+                quality=self.compression_quality,
+                optimize=True,
+                progressive=True
+            )
+        else:
+            # 不压缩：使用高质量参数
+            image.save(
+                output_path,
+                format='JPEG',
+                quality=95
+            )
 
     def update_progress(self, value, maximum, percent=None):
         """更新进度条和状态"""
@@ -1001,6 +1112,13 @@ class ImageProcessorApp:
         else:
             mode_name = "⚡ 快速模式（V1.5优化算法）"
         self.log(f"当前算法模式: {mode_name}")
+        
+        # 显示压缩设置
+        if self.enable_compression:
+            self.log(f"压缩设置: ✅ 已启用 (质量={self.compression_quality})")
+        else:
+            self.log(f"压缩设置: ❌ 未启用 (质量=95，无优化)")
+        
         self.log("=" * 50)
 
         # 在新线程中处理图片，避免界面卡死
@@ -1041,9 +1159,8 @@ class ImageProcessorApp:
                             img = Image.open(input_img_path)
                             img.load()
                             inverted_img = apply_yellow_text_effect(img, self.yellow_text_r, self.yellow_text_g, self.yellow_text_b, use_quality_mode=self.use_quality_mode, auto_mode=self.use_auto_mode)
-                            if inverted_img.mode == 'RGBA':
-                                inverted_img = inverted_img.convert('RGB')
-                            inverted_img.save(output_img_path, quality=95, optimize=True)
+                            # 使用压缩设置保存
+                            self.save_image_with_compression(inverted_img, output_img_path)
                             return True, img_file
                         except Exception as e:
                             return False, f"{img_file}: {str(e)}"
@@ -1072,9 +1189,8 @@ class ImageProcessorApp:
                             img = Image.open(input_img_path)
                             img.load()
                             inverted_img = apply_yellow_text_effect(img, self.yellow_text_r, self.yellow_text_g, self.yellow_text_b, use_quality_mode=self.use_quality_mode, auto_mode=self.use_auto_mode)
-                            if inverted_img.mode == 'RGBA':
-                                inverted_img = inverted_img.convert('RGB')
-                            inverted_img.save(output_img_path, quality=95, optimize=True)
+                            # 使用压缩设置保存
+                            self.save_image_with_compression(inverted_img, output_img_path)
                             self.log(f"已反色并保存: {img_file}")
                         except Exception as e:
                             self.log(f"处理 {img_file} 时出错: {str(e)}")
@@ -1143,14 +1259,12 @@ class ImageProcessorApp:
 
                     # 确保图像是RGB模式（没有透明通道）
                     try:
-                        if result_img.mode == 'RGBA':
-                            result_img = result_img.convert('RGB')
-
                         # 更新文件命名，恢复原始的命名规则
                         output_filename = f"第{song_number}首 {song_name}.jpg"
 
                         output_path = Path(self.output_folder) / output_filename
-                        result_img.save(output_path, quality=95)
+                        # 使用压缩设置保存
+                        self.save_image_with_compression(result_img, output_path)
 
                         # 记录日志
                         if len(images) == 1 and not self.only_concat.get():
@@ -1236,6 +1350,32 @@ class ImageProcessorApp:
             else:
                 mode_name = "快速模式（V1.5）"
             print(f"已切换到：{mode_name}")
+
+    def update_compression_state(self):
+        """更新压缩开关状态"""
+        self.enable_compression = self.compression_var.get()
+        
+        # 根据压缩开关启用/禁用质量滑块
+        if self.enable_compression:
+            self.quality_scale.config(state='normal')
+        else:
+            self.quality_scale.config(state='disabled')
+        
+        # 保存配置
+        self.save_config()
+        
+        # 打印状态
+        status = "已启用" if self.enable_compression else "已禁用"
+        print(f"压缩功能 {status}")
+    
+    def on_quality_change(self, value):
+        """当压缩质量滑块改变时更新显示"""
+        quality = int(float(value))
+        self.compression_quality = quality
+        self.quality_label.config(text=str(quality))
+        
+        # 保存配置
+        self.save_config()
 
 if __name__ == "__main__":
     root = tk.Tk()

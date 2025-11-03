@@ -5,5 +5,7 @@
   "yellow_text_g": 165,
   "yellow_text_b": 32,
   "use_quality_mode": false,
-  "use_auto_mode": true
+  "use_auto_mode": true,
+  "enable_compression": true,
+  "compression_quality": 82
 }
